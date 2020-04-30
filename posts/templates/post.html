@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %} Страница поста - {{ post.id }}{% endblock %}
+{% block content %}
+{% load thumbnail %}
+{% include 'post_item.html' with post=post %}
+{% include 'comments.html' %}
+{% endblock %}
