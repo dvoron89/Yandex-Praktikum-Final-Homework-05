@@ -1,9 +1,8 @@
 from django.test import TestCase
 from django.test import Client
 from django.contrib.auth.models import User
-from .models import Post
-from .forms import NewPostForm
-from .models import Group
+from .models import Post, Group, Follow
+from .forms import PostForm
 from django.urls import reverse
 from django.core.cache import cache
 from django.core.cache.utils import make_template_fragment_key
@@ -41,6 +40,7 @@ class TestPosts(TestCase):
         self.assertIn(self.new_user, User.objects.all(), msg = 'New user was not created')
         response = self.client.get(reverse('profile', kwargs = {'username' : self.new_user.username}))
         self.assertEqual(response.status_code, 200, msg = 'New user has no profile page')
+        
 
     # 1 check profile page of premade user
     def test_profile_creation(self):
@@ -150,12 +150,85 @@ class TestPosts(TestCase):
                          msg='New post with wrong image format was created')
         self.assertEqual(response.status_code, 200, msg='After failing to create post with wrong image format you should stay on the same page for next attempt')
 
+
     def test_cache_index_page(self):
         self.client.get(reverse('index'))
         self.assertIsNotNone(cache.get(make_template_fragment_key('index_page')), msg='Index page should been cached')
         cache.delete(make_template_fragment_key('index_page'))
         self.client.get(reverse('post', kwargs={'username': self.user.username, 'post_id': self.post.id}))
         self.assertIsNone(cache.get(make_template_fragment_key('index_page')), msg='Only index page should be cached')
+
+
+    def test_follow_unfollow(self):
+        self.client.force_login(self.user)
+        self.best_author_ever = User.objects.create_user(
+            username = 'Max Power',
+            password = 'godlike'
+        )
+        response = self.client.post(reverse('profile_follow', kwargs={'username': self.best_author_ever.username}), follow=True)
+        self.assertEqual(response.status_code, 200, msg='Authorized user should be able to reach follow page')
+        self.follows_count = Follow.objects.count()
+        self.assertIn(Follow.objects.get(user=self.user, author=self.best_author_ever), Follow.objects.all(), msg='Authorized user should be able to follow author')
+        self.client.post(reverse('profile_follow', kwargs={'username': self.best_author_ever.username}), follow=True)
+        self.follow_obj = Follow.objects.get(user=self.user, author=self.best_author_ever)
+        self.assertEqual(self.follows_count, Follow.objects.count(), msg='Double following should not happen')
+        response = self.client.post(reverse('profile_unfollow', kwargs={'username': self.best_author_ever.username}), follow=True)
+        self.assertEqual(response.status_code, 200, msg='Authorized user should be able to reach unfollow page')
+        self.assertNotIn(self.follow_obj, Follow.objects.all(), msg='Authorized user should be able to unfollow author')
+        self.follows_count = Follow.objects.count()
+        self.client.post(reverse('profile_unfollow', kwargs={'username': self.best_author_ever.username}), follow=True)
+        self.assertEqual(self.follows_count, Follow.objects.count(), msg='Cant unfollow author that you never followed')
+
+        self.client.logout()
+        self.follow_obj = Follow.objects.create(
+            user = self.user,
+            author = self.best_author_ever
+        )
+        self.follows_count = Follow.objects.count()
+        response = self.client.post(reverse('profile_follow', kwargs={'username': self.best_author_ever.username}), follow=True)
+        self.assertContains(response, '/auth/login/', msg_prefix='Unauthorized user should be redirected to authorization page')
+        self.assertEqual(self.follows_count, Follow.objects.count(), msg='Follow object was created by unauthorized user')
+        response = self.client.post(reverse('profile_unfollow', kwargs={'username': self.best_author_ever.username}), follow=True)
+        self.assertContains(response, '/auth/login/', msg_prefix='Unauthorized user should be redirected to authorization page')
+        self.assertEqual(self.follows_count, Follow.objects.count(), msg='Follow object was destoyed by unauthorized user')
+
+
+    def test_personal_feed(self):
+        self.author = User.objects.create_user(
+            username = 'author',
+            password = 'author'
+        )
+        self.sub = User.objects.create_user(
+            username = 'sub',
+            password = 'sub'
+        )
+        self.unsub = User.objects.create_user(
+            username = 'unsub',
+            password = 'unsub'
+        )
+        self.authors_post = Post.objects.create(
+            text = 'Best text',
+            author = self.author
+        )
+        self.following = Follow.objects.create(
+            user = self.sub,
+            author = self.author
+        )
+        self.client.force_login(self.sub)
+        response = self.client.get(reverse('follow_index'))
+        self.assertContains(response, self.authors_post.text, msg_prefix='Subscriber should see posts from followed authors')
+        self.client.force_login(self.unsub)
+        response = self.client.get(reverse('follow_index'))
+        self.assertNotContains(response, self.authors_post.text, msg_prefix='Only followed authors should appear at follow_index page')
+
+
+    def test_comment_post(self):
+        response = self.client.post(reverse('add_comment', kwargs={'username': self.post.author.username, 'post_id': self.post.id}), follow=True)
+        self.assertContains(response, '/auth/login/', msg_prefix='Unauthorized user should be redirected to authorization page')
+
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('add_comment', kwargs={'username': self.post.author.username, 'post_id': self.post.id}), follow=True)
+        self.assertNotContains(response, '/auth/login/', msg_prefix='Authorized user should have assecc to comment post')
 
     def tearDown(self):
         self.client.logout()

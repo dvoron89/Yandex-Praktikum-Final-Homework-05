@@ -26,17 +26,30 @@
                                                         Записей: {{ paginator.count }}
                                                 </div>
                                         </li>
+                                        {% if profile != request.user %}
+                                        <li class="list-group-item">
+                                                {% if following %}
+                                                <a class="btn btn-lg btn-light" href="{% url 'profile_unfollow' profile.username %}" role="button">
+                                                        Отписаться
+                                                </a>
+                                                {% else %}
+                                                <a class="btn btn-lg btn-primary" href="{% url 'profile_follow' profile.username %}" role="button">
+                                                        Подписаться
+                                                </a>
+                                                {% endif %}
+                                        </li>
+                                        {% endif %}
                                 </ul>
                         </div>
                 </div>
 
                 <div class="col-md-9">
                         {% for item in page %}
-                        {% include 'post_item.html' with post=item %}
+                                {% include 'post_item.html' with post=item %}
                         {% endfor %}
 
                         {% if page.has_other_pages %}
-                        {% include 'paginator.html' with items=page paginator=paginator %}
+                                {% include 'paginator.html' with items=page paginator=paginator %}
                         {% endif %}
                 </div>
         </div>

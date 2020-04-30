@@ -1,8 +1,8 @@
 from django.shortcuts import render, get_object_or_404, get_list_or_404
-from .models import Post, Group, Comment
+from .models import Post, Group, Comment, Follow
 from django.contrib.auth.decorators import login_required
-from .forms import NewPostForm, NewCommentForm
-from django.shortcuts import redirect
+from .forms import PostForm, CommentForm
+from django.shortcuts import redirect, reverse
 from django.core.paginator import Paginator
 from django.contrib.auth import get_user_model
 
@@ -19,7 +19,8 @@ def index(request):
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
-    posts = get_list_or_404(Post, group=group)
+    # do not use get_list_or_404 cuz group could have 0 posts
+    posts = Post.objects.filter(group=group)
     paginator = Paginator(posts, 5)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
@@ -28,7 +29,7 @@ def group_posts(request, slug):
 
 @login_required
 def new_post(request):
-    form = NewPostForm(request.POST or None, files=request.FILES or None)
+    form = PostForm(request.POST or None, files=request.FILES or None)
     if request.method == 'POST':
         if form.is_valid():
             new_post = form.save(commit=False)
@@ -40,27 +41,33 @@ def new_post(request):
 
 
 def profile(request, username):
-    posts = get_list_or_404(Post, author__username=username)
-    user = get_object_or_404(User, username=username)
+    profile = get_object_or_404(User, username=username)
+    # do not use get_list_or_404 cuz user could have 0 posts
+    posts = Post.objects.filter(author=profile) 
     paginator = Paginator(posts, 5)
     page = paginator.get_page(request.GET.get('page'))
     allow_edit = False
     if request.user.username == username:
         allow_edit = True
-    return render(request, 'profile.html', {'profile': user, 'paginator': paginator, 'page': page, 'allow_edit': allow_edit})
+    try:
+        Follow.objects.get(user=request.user, author=profile)
+        following = True
+    except:
+        following = False
+    return render(request, 'profile.html', {'profile': profile, 'paginator': paginator, 'page': page, 'allow_edit': allow_edit, 'following': following})
 
 
 def post_view(request, username, post_id):
     post = get_object_or_404(Post, id=post_id)
-    user = post.author
-    form = NewCommentForm(request.POST or None)
+    profile = post.author
+    form = CommentForm(request.POST or None)
     items = Comment.objects.filter(post__id=post_id)
     posts_count = Post.objects.filter(author__username=username).count()
     if request.user.username == username:
         allow_edit = True
     else:
         allow_edit = False
-    return render(request, 'post.html', {'post': post, 'profile': user, 'posts_count': posts_count, 'allow_edit': allow_edit, 'items': items, 'form': form})
+    return render(request, 'post.html', {'post': post, 'profile': profile, 'posts_count': posts_count, 'allow_edit': allow_edit, 'items': items, 'form': form})
 
 
 @login_required
@@ -71,7 +78,7 @@ def post_edit(request, username, post_id):
     else:
         allow_edit = True
     post = get_object_or_404(Post, author__username=username, id=post_id)
-    form = NewPostForm(request.POST or None, files=request.FILES or None, instance=post)
+    form = PostForm(request.POST or None, files=request.FILES or None, instance=post)
     if request.method == 'POST' and allow_edit:
         if form.is_valid():
             form.save()
@@ -80,8 +87,9 @@ def post_edit(request, username, post_id):
     return render(request, 'new_post.html', {'form': form, 'allow_edit': allow_edit, 'username': username, 'post_id': post_id, 'post': post})
 
 
+@login_required
 def add_comment(request, username, post_id):
-    form = NewCommentForm(request.POST or None)
+    form = CommentForm(request.POST or None)
     if form.is_valid():
         new_comment = form.save(commit=False)
         new_comment.author = request.user
@@ -89,6 +97,48 @@ def add_comment(request, username, post_id):
         form.save()
         return redirect('post', username, post_id)
     return redirect('post', username, post_id)
+
+
+@login_required
+def follow_index(request):
+    # do not use get_list_or_404 cuz user could have 0 followings
+    follows = Follow.objects.filter(user=request.user)
+    posts = []
+    if follows:
+        for follow in follows:
+            # do not use get_list_or_404 cuz user can follow author with 0 posts
+            posts_to_append = Post.objects.filter(author=follow.author)
+            for post in posts_to_append:
+                posts.append(post)
+    posts.sort(key=lambda x: x.pub_date, reverse=True)
+    paginator = Paginator(posts, 5)
+    page = paginator.get_page(request.GET.get('page'))
+    return render(request, 'follow.html', {'page': page, 'paginator': paginator})
+    pass
+
+
+@login_required
+def profile_follow(request, username):
+    user = request.user
+    author = get_object_or_404(User, username=username)
+    try:
+        Follow.objects.get(user=user, author=author)
+        return redirect(reverse('profile', kwargs={'username': username}))
+    except:
+        if user != author:
+            Follow.objects.create(user=user, author=author)
+        return redirect(reverse('profile', kwargs={'username': username}))
+
+
+@login_required
+def profile_unfollow(request, username):
+    user = request.user
+    author = get_object_or_404(User, username=username)
+    try:
+        Follow.objects.get(user=user, author=author).delete()
+        return redirect(reverse('profile', kwargs={'username': username}))
+    except:
+        return redirect(reverse('profile', kwargs={'username': username}))
 
 
 def page_not_found(request, exception):
