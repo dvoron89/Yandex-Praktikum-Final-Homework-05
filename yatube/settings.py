@@ -38,7 +38,7 @@ ALLOWED_HOSTS = [
 INSTALLED_APPS = [
     'users',
     'posts',
-    # 'ckeditor',
+    'ckeditor',
     'django.contrib.sites',
     'django.contrib.flatpages',
     'django.contrib.admin',

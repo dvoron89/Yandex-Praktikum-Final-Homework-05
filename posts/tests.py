@@ -1,11 +1,12 @@
-from django.test import TestCase
-from django.test import Client
+from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from .models import Post, Group, Follow
 from .forms import PostForm
 from django.urls import reverse
 from django.core.cache import cache
 from django.core.cache.utils import make_template_fragment_key
+from django.core.paginator import Paginator
+import time
 
 
 class TestMemasik(TestCase):
@@ -30,6 +31,12 @@ class TestPosts(TestCase):
             author = self.user,
             image = 'posts/bender_icon.png'
         )
+        for i in range(0, 100):
+            Post.objects.create(
+                text = f'some text #{i}',
+                author = self.user,
+                image = 'posts/bender_icon.png'
+            )
 
     # 1 registration of new user and check profile page avl
     def test_new_user_reg(self):
@@ -152,11 +159,41 @@ class TestPosts(TestCase):
 
 
     def test_cache_index_page(self):
-        self.client.get(reverse('index'))
-        self.assertIsNotNone(cache.get(make_template_fragment_key('index_page')), msg='Index page should been cached')
-        cache.delete(make_template_fragment_key('index_page'))
-        self.client.get(reverse('post', kwargs={'username': self.user.username, 'post_id': self.post.id}))
-        self.assertIsNone(cache.get(make_template_fragment_key('index_page')), msg='Only index page should be cached')
+        response = self.client.get(reverse('index'))
+        # every iteration check if cache exists exactly for current page
+        for index in response.context['paginator'].page_range:
+            inner_response = self.client.get(reverse('index') + f'/?page={index}')
+            self.assertIsNotNone(
+                cache.get(
+                    make_template_fragment_key(
+                        'index_page', 
+                        [response.context['paginator'].get_page(index)])), 
+                        msg=f'Index page should been cached, error at page - {index}')
+            posts_on_this_page = inner_response.context['paginator'].get_page(index)
+            # every inner iteration check if cache contains text for post from current page
+            for post in posts_on_this_page:
+                self.assertIn(
+                    post.text, 
+                    cache.get(
+                        make_template_fragment_key(
+                            'index_page', 
+                            [response.context['paginator'].get_page(index)])), 
+                            msg=f'Post is not cached. Post content - {post.text}')
+
+        # have to wait at least 20 seconds to let cache clear itself
+        print('Я НЕ ЗАВИС, Я ТАК РАБОТАЮ. ПОДОЖДИ 25 СЕКУНД')
+        for seconds in range(0, 25):
+            print(25 - seconds)
+            time.sleep(1)
+
+        # every iteration check cache is not exists for current page
+        for index in response.context['paginator'].page_range:
+            self.assertIsNone(
+                cache.get(
+                    make_template_fragment_key(
+                        'index_page', 
+                        [response.context['paginator'].get_page(index)])), 
+                        msg=f'Cache from index page should be cleared, error at page - {index}')
 
 
     def test_follow_unfollow(self):

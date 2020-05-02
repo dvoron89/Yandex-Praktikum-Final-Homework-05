@@ -10,7 +10,9 @@ User = get_user_model()
 
 
 def index(request):
-    post_list = get_list_or_404(Post)
+    # in case there are no posts for index page dont use get_list_or_404
+    # posts ordering is set in models (field - '-pud_date')
+    post_list = Post.objects.all()
     paginator = Paginator(post_list, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
@@ -47,13 +49,15 @@ def profile(request, username):
     paginator = Paginator(posts, 5)
     page = paginator.get_page(request.GET.get('page'))
     allow_edit = False
-    if request.user.username == username:
-        allow_edit = True
-    try:
-        Follow.objects.get(user=request.user, author=profile)
-        following = True
-    except:
-        following = False
+    following = False
+    if request.user.is_authenticated:
+        if request.user.username == username:
+            allow_edit = True
+        try:
+            Follow.objects.get(user=request.user, author=profile)
+            following = True
+        except Follow.DoesNotExist:
+            following = False
     return render(request, 'profile.html', {'profile': profile, 'paginator': paginator, 'page': page, 'allow_edit': allow_edit, 'following': following})
 
 
@@ -102,19 +106,17 @@ def add_comment(request, username, post_id):
 @login_required
 def follow_index(request):
     # do not use get_list_or_404 cuz user could have 0 followings
-    follows = Follow.objects.filter(user=request.user)
     posts = []
-    if follows:
-        for follow in follows:
-            # do not use get_list_or_404 cuz user can follow author with 0 posts
-            posts_to_append = Post.objects.filter(author=follow.author)
-            for post in posts_to_append:
-                posts.append(post)
-    posts.sort(key=lambda x: x.pub_date, reverse=True)
+    # Спасибо за рекомендацию! не знал о методах values() & values_list()
+    # есть ли смысл запрашивать values_list() без промежуточной переменной? 
+    authors = Follow.objects.filter(user=request.user).values_list('author')
+    # проверка на необходимоть делать запрос к базе
+    if authors.count() != 0:
+        # не делаю упорядочивание здесь, так как ordering задан в самой модели
+        posts = Post.objects.filter(author__in=authors)
     paginator = Paginator(posts, 5)
     page = paginator.get_page(request.GET.get('page'))
     return render(request, 'follow.html', {'page': page, 'paginator': paginator})
-    pass
 
 
 @login_required
