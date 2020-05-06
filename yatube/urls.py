@@ -12,7 +12,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('auth/', include('users.urls')),
     path('auth/', include('django.contrib.auth.urls')),
-    # path('/', include('django.contrib.flatpages.urls')),
     path('about-us/', views.flatpage, {'url' : '/about-author/'}, name = 'about'),
     path('terms/', views.flatpage, {'url' : '/terms/'}, name = 'terms'),
     path('about-author/', views.flatpage, {'url' : '/about-author/'}, name = 'about-author'),
@@ -21,6 +20,8 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
+    import debug_toolbar
+
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
+    urlpatterns += (path("__debug__/", include(debug_toolbar.urls)),)
