@@ -89,6 +89,9 @@ class TestPosts(TestCase):
         response = self.client.get(reverse('profile', kwargs = {'username' : self.user.username}))
         self.assertEqual(response.status_code, 200, msg = "Profile page is not avl somewhy")
         self.assertIn(self.new_post, response.context['page'], msg = 'New post is not on the profile page')
+        self.assertContains(response, self.new_post.text)
+        response = self.client.get('/test_dummy/')
+        print(response.context['post'])
 
         response = self.client.get(reverse('post', kwargs = {'username' : self.user.username, 'post_id' : self.new_post.id}))
         self.assertEqual(response.status_code, 200, msg = "Post page is not avl somewhy")

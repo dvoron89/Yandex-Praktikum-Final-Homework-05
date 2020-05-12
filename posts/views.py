@@ -107,12 +107,8 @@ def add_comment(request, username, post_id):
 def follow_index(request):
     # do not use get_list_or_404 cuz user could have 0 followings
     posts = []
-    # Спасибо за рекомендацию! не знал о методах values() & values_list()
-    # есть ли смысл запрашивать values_list() без промежуточной переменной? 
     authors = Follow.objects.filter(user=request.user).values_list('author')
-    # проверка на необходимоть делать запрос к базе
     if authors.count() != 0:
-        # не делаю упорядочивание здесь, так как ordering задан в самой модели
         posts = Post.objects.filter(author__in=authors)
     paginator = Paginator(posts, 5)
     page = paginator.get_page(request.GET.get('page'))
@@ -124,9 +120,9 @@ def profile_follow(request, username):
     user = request.user
     author = get_object_or_404(User, username=username)
     try:
-        Follow.objects.get(user=user, author=author)
+        follow = Follow.objects.get(user=user, author=author)
         return redirect(reverse('profile', kwargs={'username': username}))
-    except:
+    except Follow.DoesNotExist:
         if user != author:
             Follow.objects.create(user=user, author=author)
         return redirect(reverse('profile', kwargs={'username': username}))
@@ -137,9 +133,9 @@ def profile_unfollow(request, username):
     user = request.user
     author = get_object_or_404(User, username=username)
     try:
-        Follow.objects.get(user=user, author=author).delete()
+        follow = Follow.objects.get(user=user, author=author).delete()
         return redirect(reverse('profile', kwargs={'username': username}))
-    except:
+    except Follow.DoesNotExist:
         return redirect(reverse('profile', kwargs={'username': username}))
 
 
