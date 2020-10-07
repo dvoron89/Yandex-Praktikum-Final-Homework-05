@@ -6,6 +6,7 @@ from django.shortcuts import redirect, reverse
 from django.core.paginator import Paginator
 from django.contrib.auth import get_user_model
 
+
 User = get_user_model()
 
 

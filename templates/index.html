@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load cache %}
+<!-- {% load cache %} -->
 {% block title %} Последние обновления {% endblock %}
 {% block content %}
 
@@ -8,11 +8,11 @@
     <div class="row">
         <div class="col-md mt-3">
             <h1>Последние обновления на сайте</h1>
-            {% cache 20 index_page page %}
+            <!-- {% cache 20 index_page page %} -->
                 {% for item in page %}
                     {% include 'post_item.html' with post=item %}
                 {% endfor %}
-            {% endcache %}
+            <!-- {% endcache %} -->
 
             {% if page.has_other_pages %}
                 {% include 'paginator.html' with items=page paginator=paginator %}

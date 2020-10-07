@@ -270,5 +270,7 @@ class TestPosts(TestCase):
         response = self.client.post(reverse('add_comment', kwargs={'username': self.post.author.username, 'post_id': self.post.id}), follow=True)
         self.assertNotContains(response, '/auth/login/', msg_prefix='Authorized user should have assecc to comment post')
 
+    
+
     def tearDown(self):
         self.client.logout()
